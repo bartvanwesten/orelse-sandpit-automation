@@ -57,16 +57,12 @@ def analyze_grid_resolution_in_polygons(ugrid, polygons):
     
     # Process each polygon
     for poly_idx, polygon in enumerate(polygons):
-        print(f"Processing polygon {poly_idx + 1}/{len(polygons)}")
-        
         # Create matplotlib path for point-in-polygon test
         poly_path = mpath.Path(np.array(polygon))
         
         # Find nodes inside this polygon
         inside_mask = poly_path.contains_points(node_coords)
         inside_node_indices = np.where(inside_mask)[0]
-        
-        print(f"  Found {len(inside_node_indices)} nodes inside polygon {poly_idx + 1}")
         
         # For each node inside polygon, find connected edges and calculate spacings
         for node_idx in inside_node_indices:
@@ -104,7 +100,7 @@ def analyze_grid_resolution_in_polygons(ugrid, polygons):
                 h_spacings.append(h_spacing_m)
                 v_spacings.append(v_spacing_m)
             
-            # Use median spacing as representative for this node
+            # Use max spacing as representative for this node
             if h_spacings and v_spacings:
                 h_res_m = np.max(h_spacings)
                 v_res_m = np.max(v_spacings)
@@ -123,16 +119,18 @@ def analyze_grid_resolution_in_polygons(ugrid, polygons):
 
 def analyze_resolution_patterns(nodes_data):
     """
-    Analyze resolution patterns and print summary statistics.
+    Analyze resolution patterns and return summary statistics.
     
     Parameters
     ----------
     nodes_data : list
         List of node resolution data from analyze_grid_resolution_in_polygons
+        
+    Returns
+    -------
+    tuple
+        (h_resolution_counts, v_resolution_counts) dictionaries
     """
-    print(f"\nGrid resolution analysis:")
-    print(f"Total nodes analyzed: {len(nodes_data)}")
-    
     # Group by horizontal resolution (rounded to nearest 10m)
     h_resolution_counts = defaultdict(int)
     v_resolution_counts = defaultdict(int)
@@ -143,18 +141,6 @@ def analyze_resolution_patterns(nodes_data):
         
         h_resolution_counts[h_res] += 1
         v_resolution_counts[v_res] += 1
-    
-    # Print horizontal resolutions
-    print(f"\nHorizontal X:")
-    for h_res in sorted(h_resolution_counts.keys(), reverse=True):
-        count = h_resolution_counts[h_res]
-        print(f"  {int(h_res)} m - {count} nodes")
-    
-    # Print vertical resolutions  
-    print(f"\nVertical Y:")
-    for v_res in sorted(v_resolution_counts.keys(), reverse=True):
-        count = v_resolution_counts[v_res]
-        print(f"  {int(v_res)} m - {count} nodes")
     
     return h_resolution_counts, v_resolution_counts
 
@@ -185,7 +171,6 @@ def compute_refinement_steps(ugrid, target_resolution, polygons):
     max_h_res = max(h_resolution_counts.keys())
     max_v_res = max(v_resolution_counts.keys())
     current_spacing_m = max(max_h_res, max_v_res)
-    print(f"\nCoarsest resolution found: {current_spacing_m} m")
     
     # Calculate number of refinement steps needed
     # Each refinement step halves the resolution
@@ -224,9 +209,6 @@ def apply_casulli_refinement(mk_object, all_refinement_polygons):
     
     # Perform Casulli refinement from outside to inside (coarse to fine)
     for step, step_polygons in enumerate(all_refinement_polygons):
-        actual_step = step + 1
-        print(f"Refining step {actual_step}/{len(all_refinement_polygons)} with {len(step_polygons)} polygons")
-        
         for i, polygon in enumerate(step_polygons):
             pol = np.array(polygon)
             
@@ -240,7 +222,7 @@ def apply_casulli_refinement(mk_object, all_refinement_polygons):
 
 def print_refinement_summary(polygons, all_refinement_polygons, envelope_sizes_m, n_steps, buffer_polygons):
     """
-    Print summary of the refinement process.
+    Print minimal summary of the refinement process.
     
     Parameters
     ----------
@@ -255,33 +237,5 @@ def print_refinement_summary(polygons, all_refinement_polygons, envelope_sizes_m
     buffer_polygons : list
         Buffer polygons
     """
-    print("\nRefinement Summary:")
-    print("=" * 50)
-    print(f"Original sandpits: {len(polygons)}")
-    print(f"Refinement levels processed: {len(all_refinement_polygons)}")
-    
-    total_original_polygons = len(polygons) * len(all_refinement_polygons)
     total_final_polygons = sum(len(step_polys) for step_polys in all_refinement_polygons)
-    polygons_merged = total_original_polygons - total_final_polygons
-    
-    print(f"Total polygons before merging: {total_original_polygons}")  
-    print(f"Total polygons after merging: {total_final_polygons}")
-    print(f"Polygons reduced by merging: {polygons_merged}")
-    
-    print("\nDetail per refinement level:")
-    for step_idx, step_polygons in enumerate(all_refinement_polygons):
-        target_res = envelope_sizes_m[n_steps - step_idx]
-        original_count = len(polygons)
-        final_count = len(step_polygons)
-        merged = original_count - final_count
-        
-        if merged > 0:
-            status = f"({merged} merged)"
-        else:
-            status = "(no overlaps)"
-            
-        print(f"  Level {step_idx+1} ({round(target_res, 1)}m): {original_count} → {final_count} polygons {status}")
-    
-    if len(buffer_polygons) < len(polygons):
-        buffer_merged = len(polygons) - len(buffer_polygons)
-        print(f"  Buffer zone: {len(polygons)} → {len(buffer_polygons)} polygons ({buffer_merged} merged)")
+    print(f"Refinement complete: {len(polygons)} sandpit(s) → {total_final_polygons} refinement zones")
