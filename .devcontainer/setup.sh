@@ -11,9 +11,13 @@ git lfs pull || echo "No LFS files to download"
 echo "📦 Installing Python packages..."
 pip install -r requirements.txt
 
-# Set up Jupyter extensions
+# Set up Python kernel for Jupyter
+echo "🔧 Configuring Jupyter kernel..."
+python -m ipykernel install --user --name=python3 --display-name="Python 3 (ipykernel)"
+
+# Set up Jupyter extensions (skip if fails)
 echo "🔧 Setting up Jupyter extensions..."
-jupyter labextension install @jupyter-widgets/jupyterlab-manager --no-build 2>/dev/null || echo "Extension already installed"
+jupyter labextension install @jupyter-widgets/jupyterlab-manager --no-build 2>/dev/null || echo "Extension setup skipped"
 
 echo ""
 echo "🎉 Environment setup complete!"
