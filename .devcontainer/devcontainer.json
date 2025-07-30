@@ -14,12 +14,10 @@
       ],
       "settings": {
         "python.defaultInterpreterPath": "/opt/conda/bin/python",
-        "jupyter.notebookFileRoot": "${workspaceFolder}",
-        "python.terminal.activateEnvironment": false
+        "jupyter.notebookFileRoot": "${workspaceFolder}"
       }
     }
   },
-  "remoteUser": "vscode",
-  "forwardPorts": [8888],
-  "onCreateCommand": "echo 'Codespace created! Setup will run automatically.'"
+  "remoteUser": "root",
+  "forwardPorts": [8888]
 }
