@@ -1,64 +1,31 @@
 """
-Utility functions for visualization in sandpit refinement workflow.
+Visualization utilities for OR ELSE Sand Pit Grid Refinement Tool
 """
 
-import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.patches import Patch
-from matplotlib.lines import Line2D
+import matplotlib
+import os
 
 
-def get_polygon_bounds(all_polygons_list):
-    """
-    Calculate bounds for all polygons to set consistent axis limits.
-    
-    Parameters
-    ----------
-    all_polygons_list : list
-        List of polygon sets
-        
-    Returns
-    -------
-    tuple
-        (x_min, x_max, y_min, y_max)
-    """
-    all_polygons = []
-    
-    for poly_set in all_polygons_list:
-        if isinstance(poly_set, list):
-            if len(poly_set) > 0:
-                # Check if it's a list of polygons or a single polygon
-                if isinstance(poly_set[0], list) and len(poly_set[0]) > 0:
-                    if isinstance(poly_set[0][0], list):
-                        # List of polygons
-                        all_polygons.extend(poly_set)
-                    else:
-                        # Single polygon
-                        all_polygons.append(poly_set)
-                else:
-                    # Empty or invalid structure, skip
-                    continue
-    
-    # Filter out any empty polygons
-    valid_polygons = []
-    for poly in all_polygons:
-        if len(poly) > 0:
-            try:
-                poly_array = np.array(poly)
-                if poly_array.shape[1] == 2:  # Valid polygon with x,y coordinates
-                    valid_polygons.append(poly)
-            except:
-                continue
-    
-    if len(valid_polygons) == 0:
-        return -1, 1, -1, 1  # Default bounds
-    
-    x_min = min(np.min(np.array(poly)[:, 0]) for poly in valid_polygons)
-    x_max = max(np.max(np.array(poly)[:, 0]) for poly in valid_polygons)
-    y_min = min(np.min(np.array(poly)[:, 1]) for poly in valid_polygons)
-    y_max = max(np.max(np.array(poly)[:, 1]) for poly in valid_polygons)
-    
-    return x_min, x_max, y_min, y_max
+def set_interactive_plots():
+    """Enable interactive plots"""
+    plt.ion()
+    try:
+        # Try to use widget backend if available
+        if 'ipympl' in plt.get_backend():
+            pass
+        else:
+            matplotlib.use('notebook')
+    except:
+        plt.ion()  # Fallback to basic interactive
+    print("📊 Interactive plots enabled")
+
+
+def set_static_plots():
+    """Enable static plots (better for codespaces)"""
+    plt.ioff()
+    matplotlib.use('Agg')
+    print("📈 Static plots enabled")
 
 
 def plot_grid(mk_object, polygons, all_refinement_polygons, all_original_polygons,
