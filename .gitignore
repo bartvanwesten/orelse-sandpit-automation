@@ -205,3 +205,31 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Project-specific additions for Orelse Sand Pit Tool
+
+# Large output files
+data/output/
+temp/
+*.tmp
+
+# Scientific data formats (if you want to exclude certain ones)
+# Note: Don't add *.nc here since you're using Git LFS for input .nc files
+*.rst
+*.log
+
+# Grid/mesh temporary files
+*.bak
+*_backup.*
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Jupyter notebook outputs (optional - removes all output cells)
+# Uncomment if you want to keep notebooks clean of outputs
+# *.ipynb filter=nbstripout
+
+# IDE files not covered above
+.vscode/settings.json
+.idea/
