@@ -5,6 +5,7 @@ Visualization utilities for OR ELSE Sand Pit Grid Refinement Tool
 import matplotlib.pyplot as plt
 import matplotlib
 import os
+import numpy as np
 
 
 def set_interactive_plots():
