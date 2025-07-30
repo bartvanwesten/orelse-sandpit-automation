@@ -11,4 +11,7 @@ git lfs pull || echo "No LFS files to download"
 echo "📦 Installing Python packages..."
 pip install -r requirements.txt
 
-echo "🎉 Setup complete!"
+echo ""
+echo "🎉 Environment setup complete!"
+echo "📓 Open 'notebooks/automatic_sandpit_refinement.ipynb' to get started"
+echo "🐍 Python interpreter: /opt/conda/bin/python"
