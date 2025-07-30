@@ -1,0 +1,21 @@
+name: orelse-env
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - numpy
+  - pandas
+  - matplotlib
+  - scipy
+  - xarray
+  - netcdf4
+  - jupyter
+  - pytest
+  - requests
+  - zipfile36  # if needed
+  - pip
+  - pip:
+    - hydrolib-core
+    - dfm-tools
+    # Add other pip-only packages here
