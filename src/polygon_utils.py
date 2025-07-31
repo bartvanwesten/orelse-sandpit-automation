@@ -336,11 +336,7 @@ def generate_refinement_polygons(polygons, refinement_params, buffer_around_sand
     envelope_sizes_m = refinement_params['envelope_sizes_m']
     current_spacing_m = refinement_params['current_spacing_m']
     
-    print("Generating refinement polygons with overlap merging:")
-    print("Current spacing:", round(current_spacing_m, 1), "m")
-    print("Target resolution:", refinement_params['target_resolution'], "m")
-    print("Number of refinement steps:", n_steps)
-    print("Buffer around sandpit:", buffer_around_sandpit, "m")
+    print(f"Generating {n_steps} refinement levels: {current_spacing_m:.0f}m → {refinement_params['target_resolution']}m")
     
     # Calculate expansion distances working from innermost to outermost
     expansions = []
@@ -355,13 +351,9 @@ def generate_refinement_polygons(polygons, refinement_params, buffer_around_sand
         transition_width = (N + 2) * current_res
         cumulative_expansion += transition_width
         expansions.append(cumulative_expansion)
-        
-        print("Step", step + 1, "- refine to", round(current_res, 1), "m, transition width:", round(transition_width, 1), "m, total expansion:", round(cumulative_expansion, 1), "m")
     
     # Reverse to get outermost first (for Casulli application order)
     expansions.reverse()
-    
-    print("\nExpansions from sandpit (outermost to innermost):", [round(e, 1) for e in expansions])
     
     # Generate refinement polygons with overlap checking and merging
     all_refinement_polygons = []
@@ -380,8 +372,6 @@ def generate_refinement_polygons(polygons, refinement_params, buffer_around_sand
         all_original_polygons.append(step_polygons)
         
         # Check for overlaps and merge if necessary
-        print(f"Step {step_idx+1}: Checking {len(step_polygons)} polygons for overlaps...")
-        
         # Convert to Shapely polygons for overlap detection
         shapely_polygons = []
         for poly in step_polygons:
@@ -447,17 +437,15 @@ def generate_refinement_polygons(polygons, refinement_params, buffer_around_sand
                 merged_polygon = unary_union(polygons_to_merge).convex_hull
                 coords = list(merged_polygon.exterior.coords)
                 merged_step_polygons.append(coords)
-                print(f"  Merged {len(group)} overlapping polygons into 1 polygon")
+                print(f"  Step {step_idx+1}: merged {len(group)} overlapping polygons")
         
         all_refinement_polygons.append(merged_step_polygons)
         
         # Report results
         target_res = envelope_sizes_m[n_steps - step_idx]  # Outermost=coarsest, innermost=finest
-        print(f"  Step {step_idx+1}: {len(step_polygons)} polygons → {len(merged_step_polygons)} polygons")
-        print(f"  Resolution: {round(target_res, 1)}m, expansion: {round(expansion_distance, 1)}m")
+        print(f"  Level {step_idx+1}: {len(step_polygons)} → {len(merged_step_polygons)} polygons @ {target_res:.0f}m")
     
     # Handle buffer polygons with overlap merging  
-    print("\nProcessing buffer polygons...")
     original_buffer_polygons = []
     for i, polygon in enumerate(polygons):
         polygon_array = np.array(polygon)
@@ -524,23 +512,8 @@ def generate_refinement_polygons(polygons, refinement_params, buffer_around_sand
             merged_polygon = unary_union(polygons_to_merge).convex_hull
             coords = list(merged_polygon.exterior.coords)
             buffer_polygons.append(coords)
-            print(f"  Merged {len(group)} overlapping buffer polygons into 1 polygon")
+            print(f"  Buffer: merged {len(group)} overlapping polygons")
     
-    print(f"Buffer polygons: {len(original_buffer_polygons)} → {len(buffer_polygons)} polygons")
-    print(f"Buffer expansion: {round(buffer_around_sandpit, 1)}m")
-    
-    # Verification
-    print("\nVerification:")
-    print("Target resolution:", refinement_params['target_resolution'], "m")
-    print("Final envelope size:", round(envelope_sizes_m[-1], 1), "m")
-    print("Number of refinement levels:", len(all_refinement_polygons))
-    print("Expected refinement steps:", n_steps)
-    print("Match:", len(all_refinement_polygons) == n_steps, "(should be True)")
-    
-    # Print polygon counts per step
-    print("\nPolygon counts per refinement step:")
-    for step_idx, step_polygons in enumerate(all_refinement_polygons):
-        target_res = envelope_sizes_m[n_steps - step_idx]
-        print(f"  Step {step_idx+1} ({round(target_res, 1)}m): {len(step_polygons)} polygons")
+    print(f"Buffer polygons: {len(original_buffer_polygons)} → {len(buffer_polygons)} @ {buffer_around_sandpit}m")
     
     return all_refinement_polygons, all_original_polygons, buffer_polygons, expansions
