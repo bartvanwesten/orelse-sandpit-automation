@@ -75,36 +75,6 @@ def get_polygon_bounds(all_polygons_list):
     return x_min, x_max, y_min, y_max
 
 
-def set_interactive_plots():
-    """Enable interactive plots based on environment"""
-    if is_codespace():
-        print("⚠️  Interactive plots not supported in Codespace - using static plots")
-        set_static_plots()
-    else:
-        plt.ion()
-        try:
-            matplotlib.use('tk')
-            print("📊 Interactive plots enabled (tkinter)")
-        except:
-            try:
-                matplotlib.use('qt5agg')
-                print("📊 Interactive plots enabled (qt5)")
-            except:
-                matplotlib.use('inline')
-                print("📈 Fallback to static plots")
-
-
-def set_static_plots():
-    """Enable static plots based on environment"""
-    plt.ioff()
-    if is_codespace():
-        # Use default backend in Codespace
-        print("📈 Static plots enabled (Codespace)")
-    else:
-        matplotlib.use('inline')
-        print("📈 Static plots enabled (inline)")
-
-
 def plot_grid(mk_object, polygons, all_refinement_polygons, all_original_polygons,
               buffer_polygons, envelope_sizes_m, n_steps, 
               original_buffer_polygons=None, title=None):
