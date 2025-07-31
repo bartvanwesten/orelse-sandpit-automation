@@ -77,9 +77,9 @@ def set_interactive_plots():
 
 
 def set_static_plots():
-    """Enable static plots (better for codespaces)"""
+    """Enable static plots for codespace environment"""
     plt.ioff()
-    matplotlib.use('Agg')
+    matplotlib.use('inline')
     print("📈 Static plots enabled")
 
 
