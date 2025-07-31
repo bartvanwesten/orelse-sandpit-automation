@@ -186,6 +186,8 @@ def compute_refinement_steps(ugrid, target_resolution, polygons):
         if step < n_refinement_steps:
             current_envelope = current_envelope / 2
     
+    print(f"Grid analysis: Current {current_spacing_m:.0f}m → Target {target_resolution}m in {n_refinement_steps} steps")
+    
     return {
         'n_steps': n_refinement_steps,
         'envelope_sizes_m': envelope_sizes,
@@ -207,6 +209,8 @@ def apply_casulli_refinement(mk_object, all_refinement_polygons):
     """
     from meshkernel import GeometryList
     
+    print("Applying Casulli refinement...")
+    
     # Perform Casulli refinement from outside to inside (coarse to fine)
     for step, step_polygons in enumerate(all_refinement_polygons):
         for i, polygon in enumerate(step_polygons):
@@ -218,6 +222,8 @@ def apply_casulli_refinement(mk_object, all_refinement_polygons):
             
             poly_geolist = GeometryList(x_coordinates=pol[:,0], y_coordinates=pol[:,1])
             mk_object.mesh2d_casulli_refinement_on_polygon(poly_geolist)
+        
+        print(f"  Level {step+1}: refined {len(step_polygons)} zones")
 
 
 def print_refinement_summary(polygons, all_refinement_polygons, envelope_sizes_m, n_steps, buffer_polygons):
@@ -237,5 +243,7 @@ def print_refinement_summary(polygons, all_refinement_polygons, envelope_sizes_m
     buffer_polygons : list
         Buffer polygons
     """
-    total_final_polygons = sum(len(step_polys) for step_polys in all_refinement_polygons)
-    print(f"Refinement complete: {len(polygons)} sandpit(s) → {total_final_polygons} refinement zones")
+    total_refinement_zones = sum(len(step_polys) for step_polys in all_refinement_polygons)
+    print(f"\nRefinement summary:")
+    print(f"  {len(polygons)} sandpit(s) → {total_refinement_zones} refinement zones + {len(buffer_polygons)} buffer zones")
+    print(f"  Target resolution: {envelope_sizes_m[-1]:.0f}m achieved")
