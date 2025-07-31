@@ -63,16 +63,9 @@ def get_polygon_bounds(all_polygons_list):
     return x_min, x_max, y_min, y_max
 
 def set_interactive_plots():
-    """Enable interactive plots"""
+    """Enable interactive plots for codespace environment"""
     plt.ion()
-    try:
-        # Try to use widget backend if available
-        if 'ipympl' in plt.get_backend():
-            pass
-        else:
-            matplotlib.use('notebook')
-    except:
-        plt.ion()  # Fallback to basic interactive
+    matplotlib.use('notebook')
     print("📊 Interactive plots enabled")
 
 
