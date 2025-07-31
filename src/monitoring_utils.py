@@ -45,7 +45,7 @@ def analyze_grid_quality(mk_object, ugrid_original, all_refinement_polygons, pol
     faces_in_buffer = buffer_path.contains_points(face_coords)
     faces_indices_in_buffer = np.where(faces_in_buffer)[0]
     
-    print("Faces in buffer area:", len(faces_indices_in_buffer), "/", len(face_coords))
+    print(f"Grid quality analysis in buffer area: {len(faces_indices_in_buffer)}/{len(face_coords)} faces")
     
     # Calculate resolution for all faces (sqrt of face areas)
     mean_lat = np.mean(face_coords[:, 1])
@@ -72,15 +72,11 @@ def analyze_grid_quality(mk_object, ugrid_original, all_refinement_polygons, pol
     
     min_resolution = characteristic_lengths_all.min()
     
-    print("Background resolution in analysis area:", round(background_resolution, 1), "m")
-    print("Minimum resolution found:", round(min_resolution, 1), "m")
-    
     # Buffer statistics
     if len(faces_indices_in_buffer) > 0:
         characteristic_lengths_buffer = characteristic_lengths_all[faces_indices_in_buffer]
-        print("\nRESOLUTION WITHIN BUFFER POLYGON:")
-        print("Characteristic length - Min:", round(characteristic_lengths_buffer.min(), 1), "m, Max:", round(characteristic_lengths_buffer.max(), 1), "m")
-        print("Mean:", round(characteristic_lengths_buffer.mean(), 1), "m, Median:", round(np.median(characteristic_lengths_buffer), 1), "m")
+        print(f"Resolution range: {characteristic_lengths_buffer.min():.0f}-{characteristic_lengths_buffer.max():.0f}m "
+              f"(median: {np.median(characteristic_lengths_buffer):.0f}m)")
     else:
         print("Warning: No faces found in buffer area")
         characteristic_lengths_buffer = []
@@ -91,21 +87,15 @@ def analyze_grid_quality(mk_object, ugrid_original, all_refinement_polygons, pol
     valid_smoothness = smoothness_values[smoothness_values != -999.0]
     
     if len(valid_smoothness) > 0:
-        print("\nSMOOTHNESS:")
-        print("Range:", round(valid_smoothness.min(), 3), "-", round(valid_smoothness.max(), 3))
-        print("Mean:", round(valid_smoothness.mean(), 3))
+        exceed_recommended = np.sum(valid_smoothness > 1.4)
+        exceed_critical = np.sum(valid_smoothness > 5.0)
         
-        # Check recommended threshold (1.4)
-        exceed_recommended_smoothness = valid_smoothness > 1.4
-        if np.any(exceed_recommended_smoothness):
-            print("Warning:", np.sum(exceed_recommended_smoothness), "edges exceed recommended smoothness (>1.4)")
-        
-        # Check critical threshold (5.0)
-        exceed_critical_smoothness = valid_smoothness > 5.0
-        if np.any(exceed_critical_smoothness):
-            print("Critical:", np.sum(exceed_critical_smoothness), "edges exceed critical smoothness (>5.0)")
-        
-        print("Targets: 1.2 (area of interest), 1.4 (recommended max), 5.0 (critical max)")
+        print(f"Smoothness: {valid_smoothness.min():.3f}-{valid_smoothness.max():.3f} "
+              f"(mean: {valid_smoothness.mean():.3f})")
+        if exceed_recommended > 0:
+            print(f"  Warning: {exceed_recommended} edges exceed recommended (>1.4)")
+        if exceed_critical > 0:
+            print(f"  Critical: {exceed_critical} edges exceed critical (>5.0)")
     else:
         print("Warning: No valid smoothness data available")
     
@@ -115,21 +105,15 @@ def analyze_grid_quality(mk_object, ugrid_original, all_refinement_polygons, pol
     valid_orthogonality = orthogonality_values[orthogonality_values != -999.0]
     
     if len(valid_orthogonality) > 0:
-        print("\nORTHOGONALITY:")
-        print("Range:", round(valid_orthogonality.min(), 4), "-", round(valid_orthogonality.max(), 4))
-        print("Mean:", round(valid_orthogonality.mean(), 4))
+        exceed_recommended = np.sum(valid_orthogonality > 0.01)
+        exceed_critical = np.sum(valid_orthogonality > 0.5)
         
-        # Check recommended threshold (0.01)
-        exceed_recommended_ortho = valid_orthogonality > 0.01
-        if np.any(exceed_recommended_ortho):
-            print("Warning:", np.sum(exceed_recommended_ortho), "edges exceed recommended orthogonality (>0.01)")
-        
-        # Check critical threshold (0.5)
-        exceed_critical_ortho = valid_orthogonality > 0.5
-        if np.any(exceed_critical_ortho):
-            print("Critical:", np.sum(exceed_critical_ortho), "edges exceed critical orthogonality (>0.5)")
-        
-        print("Targets: ≤0.01 (recommended), ≤0.5 (critical threshold)")
+        print(f"Orthogonality: {valid_orthogonality.min():.4f}-{valid_orthogonality.max():.4f} "
+              f"(mean: {valid_orthogonality.mean():.4f})")
+        if exceed_recommended > 0:
+            print(f"  Warning: {exceed_recommended} edges exceed recommended (>0.01)")
+        if exceed_critical > 0:
+            print(f"  Critical: {exceed_critical} edges exceed critical (>0.5)")
     else:
         print("Warning: No valid orthogonality data available")
     
@@ -335,4 +319,4 @@ def plot_grid_quality(quality_data, all_refinement_polygons, target_resolution):
     plt.tight_layout()
     plt.show()
     
-    print("\nGrid quality analysis complete")
+    print("Grid quality analysis complete")
