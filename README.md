@@ -1,69 +1,122 @@
 # OR ELSE Sand Pit Grid Refinement Tool
 
-[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/yourusername/your-repo-name)
+Automated tool for refining D-Flow FM computational grids around sand extraction areas using progressive Casulli refinement.
 
-Grid refinement tool for D-Flow FM computational meshes around sand extraction areas in the North Sea. Uses Meshkernel to apply Casulli refinement within user-defined polygons representing sand pits.
+## Getting Started
 
-## About OR ELSE
+You can use this tool in two ways:
 
-This tool is part of the [OR ELSE research project](https://or-else.nl/en/) - a 5-year interdisciplinary research programme studying the ecological effects of sand extraction on the North Sea floor. The project aims to gather knowledge for ecologically responsible sand extraction as demand grows due to sea level rise and coastal protection needs.
+| Feature | GitHub Codespace | Local Clone |
+|---------|------------------|-------------|
+| **Setup Required** | ❌ None | ✅ Python environment |
+| **Interactive Polygon Drawing** | ❌ Not supported | ✅ Full support |
+| **Grid Quality Analysis** | ⚠️ Slower performance | ✅ Full performance |
+| **Large File Access** | ✅ Automatic | ⚠️ Manual download |
+| **Cost** | ✅ Free (with limits) | ✅ Free |
 
-## Features
+### Option 1: GitHub Codespace (Recommended for Quick Start)
 
-- **Interactive polygon drawing** or loading from existing .pol files
-- **Progressive grid refinement** using Casulli refinement method
-- **Multiple refinement steps** with smooth transitions between resolution levels
-- **Overlap detection and merging** of refinement zones
-- **Grid quality analysis** and visualization tools
-- **Target resolution** down to 30 meters
+1. **Launch Codespace**:
+   - Click the green "Code" button on GitHub → "Codespaces" → "Create Codespace"
+   - Wait for environment setup (2-3 minutes)
 
-## How to Use
+2. **Run the Tool**:
+   - Open `notebooks/automatic_sandpit_refinement.ipynb`
+   - Run all cells in sequence
+   - Grid file and sample polygons are pre-loaded
 
-### GitHub Codespaces (Recommended)
+**Limitations**: Interactive polygon drawing not supported. Use provided sample polygons or create `.pol` files locally.
 
-1. **Click the "Open in GitHub Codespaces" button above**
-2. **Wait 3-5 minutes** for automatic environment setup
-3. **Open**: `notebooks/automatic_sandpit_refinement.ipynb`
-4. **Follow the notebook workflow** to refine your grid
-5. **Download results** from `data/output/`
+### Option 2: Local Installation
 
-### Local Installation
+1. **Clone Repository**:
+   ```bash
+   git clone https://github.com/your-username/orelse-sandpit-automation.git
+   cd orelse-sandpit-automation
+   ```
 
-```bash
-git clone https://github.com/yourusername/your-repo-name.git
-cd your-repo-name
-conda env create -f environment.yml
-conda activate orelse-env
-jupyter lab notebooks/automatic_sandpit_refinement.ipynb
+2. **Download Large Files**:
+   The NetCDF grid file is for example purposes - any Delft3D Flexible Mesh grid should work. The example file is stored with Git LFS:
+   ```bash
+   # Download the example NetCDF file
+   git lfs pull
+   ```
+   
+   If you don't have Git LFS installed or the command fails:
+   ```bash
+   # Install Git LFS first
+   git lfs install
+   git lfs pull
+   ```
+   
+   **Alternative**: If Git LFS doesn't work, you can use your own D-Flow FM NetCDF grid file - just place it in `data/input/` and update the filename in the notebook.
+
+3. **Set Up Environment**:
+   ```bash
+   # Create conda environment
+   conda create -n orelse_sandpit_env python=3.11
+   conda activate orelse_sandpit_env
+   
+   # Install dependencies
+   pip install -r requirements.txt
+   ```
+
+4. **Run the Tool**:
+   ```bash
+   # Start Jupyter
+   jupyter lab
+   
+   # Open notebooks/automatic_sandpit_refinement.ipynb and run cells
+   ```
+
+## Quick Usage
+
+### Basic Workflow
+
+1. **Configure** (Step 0): Set target resolution and buffer parameters
+2. **Load Grid** (Step 1): Load D-Flow FM grid and sandpit polygons
+3. **Plan Refinement** (Step 2): Generate refinement zones with overlap detection
+4. **Execute** (Step 3): Apply Casulli refinement to grid
+5. **Monitor Quality** (Step 4): Analyze grid quality metrics (optional)
+
+### Key Parameters
+
+```python
+target_resolution = 30      # Target resolution in meters
+buffer_around_sandpit = 250 # Buffer around polygons in meters  
+N = 7                       # Number of transition cells
 ```
 
-## Workflow
+### Input Files
 
-1. **Configure** refinement parameters (target resolution, buffer distance)
-2. **Load** D-Flow FM grid and define/load sand pit polygons  
-3. **Generate** refinement zones with overlap detection
-4. **Apply** Casulli refinement to the mesh
-5. **Analyze** grid quality (optional)
+- **Grid**: NetCDF file with D-Flow FM unstructured grid (any Delft3D Flexible Mesh grid)
+- **Polygons**: Either:
+  - Existing `.pol` file with sandpit boundaries
+  - Interactive drawing (local only)
 
-## Requirements
+```
+├── src/                          # Core utilities
+│   ├── polygon_utils.py         # Polygon operations & interactive drawing
+│   ├── refinement_utils.py      # Grid analysis & Casulli refinement
+│   ├── visualization_utils.py   # Plotting & environment detection
+│   └── monitoring_utils.py      # Grid quality analysis
+├── notebooks/
+│   └── automatic_sandpit_refinement.ipynb  # Main workflow
+├── data/
+│   ├── input/                   # Input files (NetCDF, polygons)
+│   └── output/                  # Generated outputs
+└── requirements.txt             # Python dependencies
+```
 
-- Python 3.11+
-- Meshkernel
-- dfm-tools  
-- numpy, matplotlib, shapely
-- Jupyter
-
-## Input/Output
-
-**Input:** D-Flow FM network files (.nc), sand pit polygons (.pol)  
-**Output:** Refined mesh files, quality analysis, visualization plots
+- `dfm_tools` - D-Flow FM utilities
+- `meshkernel` - Grid operations and Casulli refinement  
+- `xugrid` - Unstructured grid handling
+- `shapely` - Polygon operations
+- `matplotlib` - Visualization
+- `numpy` - Numerical operations
 
 ## Contact
 
-**Bart van Westen**  
-Email: Bart.vanWesten@deltares.nl  
-Deltares
-
-## License
-
-MIT License
+- **Author**: Bart van Westen  
+- **Email**: Bart.vanWesten@deltares.nl
+- **Organization**: Deltares
