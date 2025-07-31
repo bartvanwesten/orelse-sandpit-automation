@@ -1,1 +1,18 @@
+# Git LFS tracking for large files
 *.nc filter=lfs diff=lfs merge=lfs -text
+*.NetCDF filter=lfs diff=lfs merge=lfs -text
+
+# Documentation
+*.md text
+*.txt text
+*.rst text
+
+# Source code
+*.py text
+*.ipynb text
+
+# Configuration
+*.json text
+*.yml text
+*.yaml text
+*.toml text
