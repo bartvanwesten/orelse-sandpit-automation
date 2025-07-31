@@ -29,14 +29,28 @@ You can use this tool in two ways:
 
 ### Option 2: Local Installation
 
-1. **Clone Repository**:
+**Prerequisites**: Git, Conda/Miniconda, and optionally Git LFS
+
+1. **Open Terminal and Navigate**:
+   - **Windows**: Open Command Prompt (cmd) or PowerShell
+   - **Mac/Linux**: Open Terminal
+   
+   Navigate to where you want to download the project:
    ```bash
-   git clone https://github.com/your-username/orelse-sandpit-automation.git
+   # Example: navigate to your Documents folder
+   cd Documents
+   # Or wherever you want to store the project
+   ```
+
+2. **Clone Repository**:
+   From your chosen location, clone the repository:
+   ```bash
+   git clone https://github.com/bartvanwesten/orelse-sandpit-automation.git
    cd orelse-sandpit-automation
    ```
 
-2. **Download Large Files**:
-   The NetCDF grid file is for example purposes - any Delft3D Flexible Mesh grid should work. The example file is stored with Git LFS:
+3. **Download Large Files**:
+   The NetCDF grid file is for example purposes - any Delft3D Flexible Mesh grid should work. The example file is stored with Git LFS. From the project directory:
    ```bash
    # Download the example NetCDF file
    git lfs pull
@@ -51,23 +65,30 @@ You can use this tool in two ways:
    
    **Alternative**: If Git LFS doesn't work, you can use your own D-Flow FM NetCDF grid file - just place it in `data/input/` and update the filename in the notebook.
 
-3. **Set Up Environment**:
+4. **Set Up Python Environment**:
+   Still in the project directory, create and activate a conda environment:
    ```bash
    # Create conda environment
    conda create -n orelse_sandpit_env python=3.11
+   
+   # Activate the environment
    conda activate orelse_sandpit_env
    
-   # Install dependencies
+   # Install Python dependencies
    pip install -r requirements.txt
    ```
 
-4. **Run the Tool**:
+5. **Run the Tool**:
+   With the environment activated:
    ```bash
-   # Start Jupyter
+   # Start Jupyter Lab
    jupyter lab
    
-   # Open notebooks/automatic_sandpit_refinement.ipynb and run cells
+   # In the Jupyter interface that opens in your browser:
+   # Navigate to notebooks/automatic_sandpit_refinement.ipynb and run cells
    ```
+   
+   **Note**: Make sure to keep the conda environment activated whenever working with the tool.
 
 ## Quick Usage
 
