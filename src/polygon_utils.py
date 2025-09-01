@@ -7,10 +7,11 @@ from datetime import datetime
 from shapely.geometry import Polygon
 from shapely.ops import unary_union
 import matplotlib.pyplot as plt
+import os
 
 
 class InteractivePolygonDrawer:
-    def __init__(self, ugrid_dataset, nc_path):
+    def __init__(self, ugrid_dataset, nc_path, plot_bathymetry):
         """
         Initialize InteractivePolygonDrawer with dfm_tools dataset
         
@@ -20,6 +21,8 @@ class InteractivePolygonDrawer:
             The dfm_tools ugrid dataset
         nc_path : str
             Path to netCDF file (for backup loading if needed)
+        plot_bathymetry : bool
+            Whether to plot bathymetry in the background
         """
         self.ugrid = ugrid_dataset
         self.nc_path = nc_path
@@ -27,13 +30,27 @@ class InteractivePolygonDrawer:
         self.current_polygon = []
         self.fig = None
         self.ax = None
+        self.plot_bathymetry = plot_bathymetry
         
     def draw_polygons(self):
         """Interactive polygon drawing interface with dfm_tools background"""
         self.fig, self.ax = plt.subplots(figsize=(12, 7))
         
+
+        # print("Rendering bathymetry background...")
+        # if 'NetNode_z' in self.ugrid:
+        #     self.ugrid['NetNode_z'].ugrid.plot(ax=self.ax, cmap='terrain', alpha=0.7, add_colorbar=False)
+        # elif 'mesh2d_node_z' in self.ugrid:
+        #     self.ugrid['mesh2d_node_z'].ugrid.plot(ax=self.ax, cmap='terrain', alpha=0.7, add_colorbar=False)
+
         # Plot grid using dfm_tools - much more efficient
-        print("Rendering grid background...")
+        if self.plot_bathymetry:
+            print("Rendering grid background...")
+            if 'NetNode_z' in self.ugrid:
+                self.ugrid['NetNode_z'].ugrid.plot(ax=self.ax, cmap='ocean', alpha=0.7, add_colorbar=True, vmin=-40, vmax=0, linewidth=0)
+            elif 'mesh2d_node_z' in self.ugrid:
+                self.ugrid['mesh2d_node_z'].ugrid.plot(ax=self.ax, cmap='ocean', alpha=0.7, add_colorbar=True, vmin=-40, vmax=0, linewidth=0)
+
         self.ugrid.grid.plot(ax=self.ax, linewidth=0.5, color='black', alpha=0.3)
         
         self.ax.set_xlabel('Longitude [degrees]')
@@ -517,3 +534,122 @@ def generate_refinement_polygons(polygons, refinement_params, buffer_around_sand
     print(f"Buffer polygons: {len(original_buffer_polygons)} → {len(buffer_polygons)} @ {buffer_around_sandpit}m")
     
     return all_refinement_polygons, all_original_polygons, buffer_polygons, expansions
+
+
+def add_shape_to_polygon(input_pol_file, output_pol_file, shape_type, center_lon, center_lat, **kwargs):
+    """
+    Add geometric shapes to a polygon file
+    
+    Parameters
+    ----------
+    input_pol_file : str
+        Path to input .pol file (will be created if doesn't exist)
+    output_pol_file : str
+        Path to output .pol file (will be created if doesn't exist)
+    shape_type : str
+        Type of shape: 'circle', 'rectangle', 'ellipse' (placeholder), 'triangle' (placeholder)
+    center_lon : float
+        Longitude of shape center
+    center_lat : float
+        Latitude of shape center
+    **kwargs : dict
+        Shape-specific parameters (all in degrees):
+        - For 'circle': radius (in degrees)
+        - For 'rectangle': width (in degrees), height (in degrees), rotation (in degrees, default=0)
+        - For 'ellipse': major_axis, minor_axis, rotation (placeholders)
+        - For 'triangle': side_length, rotation (placeholders)
+    
+    Returns
+    -------
+    None
+    """
+    # Load existing polygons if file exists
+    if os.path.exists(input_pol_file):
+        existing_polygons = load_pol_file(input_pol_file)
+        print(f"📂 Loading existing file: {len(existing_polygons)} polygons found")
+    else:
+        existing_polygons = []
+    
+    print(f"📝 Creating output polygon file: {output_pol_file}")
+    
+    # Generate shape coordinates
+    if shape_type.lower() == 'circle':
+        radius_deg = kwargs.get('radius')
+        if radius_deg is None:
+            raise ValueError("Circle requires 'radius' parameter (in degrees)")
+        
+        # Generate circle points (64 points for smooth circle)
+        n_points = kwargs.get('n_points', 64)
+        angles = np.linspace(0, 2*np.pi, n_points, endpoint=False)
+        
+        polygon_coords = []
+        for angle in angles:
+            lon = center_lon + radius_deg * np.cos(angle)
+            lat = center_lat + radius_deg * np.sin(angle)
+            polygon_coords.append([lon, lat])
+        
+        print(f"✅ Generated circle: center=({center_lon:.6f}, {center_lat:.6f}), radius={radius_deg}°")
+    
+    elif shape_type.lower() == 'rectangle':
+        width_deg = kwargs.get('width')
+        height_deg = kwargs.get('height')
+        rotation_deg = kwargs.get('rotation', 0)
+        
+        if width_deg is None or height_deg is None:
+            raise ValueError("Rectangle requires 'width' and 'height' parameters (in degrees)")
+        
+        # Define rectangle corners (before rotation)
+        half_width = width_deg / 2
+        half_height = height_deg / 2
+        
+        corners = [
+            [-half_width, -half_height],  # bottom-left
+            [half_width, -half_height],   # bottom-right
+            [half_width, half_height],    # top-right
+            [-half_width, half_height]    # top-left
+        ]
+        
+        # Apply rotation if specified
+        if rotation_deg != 0:
+            rotation_rad = np.radians(rotation_deg)
+            cos_rot = np.cos(rotation_rad)
+            sin_rot = np.sin(rotation_rad)
+            
+            rotated_corners = []
+            for dx, dy in corners:
+                # Rotate point around origin
+                new_dx = dx * cos_rot - dy * sin_rot
+                new_dy = dx * sin_rot + dy * cos_rot
+                rotated_corners.append([new_dx, new_dy])
+            corners = rotated_corners
+        
+        # Translate to center position
+        polygon_coords = []
+        for dx, dy in corners:
+            lon = center_lon + dx
+            lat = center_lat + dy
+            polygon_coords.append([lon, lat])
+        
+        print(f"✅ Generated rectangle: center=({center_lon:.6f}, {center_lat:.6f}), "
+              f"size={width_deg}×{height_deg}°, rotation={rotation_deg}°")
+    
+    elif shape_type.lower() == 'ellipse':
+        # Placeholder for future implementation
+        raise NotImplementedError("Ellipse shape not yet implemented. Use 'circle' or 'rectangle'.")
+    
+    elif shape_type.lower() == 'triangle':
+        # Placeholder for future implementation
+        raise NotImplementedError("Triangle shape not yet implemented. Use 'circle' or 'rectangle'.")
+    
+    else:
+        raise ValueError(f"Unknown shape_type '{shape_type}'. Available: 'circle', 'rectangle'")
+    
+    # Add new shape to existing polygons
+    existing_polygons.append(polygon_coords)
+    
+    # Save updated polygon file
+    save_pol_file(existing_polygons, output_pol_file)
+    
+    total_polygons = len(existing_polygons)
+    print(f"💾 Saved {total_polygons} polygons to {output_pol_file}")
+    print(f"   └── Added {shape_type}: SandPit_{total_polygons:03d}")
