@@ -6,7 +6,7 @@ import os
 import numpy as np
 import xarray as xr
 import xugrid as xu
-
+import dfm_tools as dfmt
 
 def generate_versioned_filename(original_file, output_dir, suffix="_ref", extension="_net.nc"):
     """
@@ -88,7 +88,7 @@ def calculate_edge_coordinates(mesh2d):
     return edge_x, edge_y, edge_nodes_2d
 
 
-def create_ugrid_dataset(mesh2d):
+def create_ugrid_dataset(mesh2d, crs='EPSG:4326'):
     """
     Create a complete UGRID-compatible xarray Dataset from MeshKernel mesh data.
     
@@ -96,6 +96,8 @@ def create_ugrid_dataset(mesh2d):
     -----------
     mesh2d : MeshKernel mesh object
         Mesh data from MeshKernel
+    crs : str, default 'EPSG:4326'
+        Coordinate reference system
         
     Returns:
     --------
@@ -112,6 +114,17 @@ def create_ugrid_dataset(mesh2d):
     face_nodes_ugrid = create_face_node_connectivity(mesh2d)
     edge_x, edge_y, edge_nodes_2d = calculate_edge_coordinates(mesh2d)
     max_nodes_per_face = face_nodes_ugrid.shape[1]
+    
+    # Create UGRID grid object with spherical coordinates (projected=False)
+    grid = xu.Ugrid2d(
+        node_x=mesh2d.node_x, 
+        node_y=mesh2d.node_y, 
+        face_node_connectivity=face_nodes_ugrid, 
+        fill_value=-1, 
+        start_index=0,
+        projected=False,  # FALSE for spherical/geographic coordinates
+        crs=crs
+    )
     
     # Create xarray Dataset with UGRID conventions
     ds = xr.Dataset({
@@ -144,9 +157,12 @@ def create_ugrid_dataset(mesh2d):
             'edge_dimension': 'mesh2d_nEdges',
             'edge_node_connectivity': 'mesh2d_edge_nodes'
         }),
+        # Updated WGS84 coordinate reference system for spherical coordinates
         'wgs84': ((), 0, {
+            'name': 'wgs 84', #WGS84
             'epsg': np.int32(4326), 
-            'grid_mapping_name': 'latitude_longitude'
+            'grid_mapping_name': 'latitude_longitude',
+            'EPSG_code': 'EPSG:4326'
         })
     }, coords={
         'mesh2d_nNodes': np.arange(n_nodes),
@@ -156,15 +172,6 @@ def create_ugrid_dataset(mesh2d):
         'Two': np.arange(2)
     })
     
-    # Create UGRID grid object
-    grid = xu.Ugrid2d(
-        node_x=mesh2d.node_x, 
-        node_y=mesh2d.node_y, 
-        face_node_connectivity=face_nodes_ugrid, 
-        fill_value=-1, 
-        start_index=0
-    )
-    
     # Mesh statistics
     stats = {
         'nodes': n_nodes,
@@ -173,7 +180,6 @@ def create_ugrid_dataset(mesh2d):
     }
     
     return ds, grid, stats
-
 
 def export_refined_grid(mk_object, original_nc_file, output_dir, suffix="_ref", verbose=True):
     """
@@ -206,18 +212,24 @@ def export_refined_grid(mk_object, original_nc_file, output_dir, suffix="_ref", 
         original_nc_file, output_dir, suffix
     )
     
-    # Get mesh data from MeshKernel
-    mesh2d = mk_object.mesh2d_get()
+
+    ugrid_complete = dfmt.meshkernel_to_UgridDataset(mk=mk_object, crs='EPSG:4326')
+
+    # # Get mesh data from MeshKernel
+    # mesh2d = mk_object.mesh2d_get()
     
-    # Create UGRID dataset
-    ds, grid, stats = create_ugrid_dataset(mesh2d)
+    # # Create UGRID dataset with spherical coordinates
+    # ds, grid, stats = create_ugrid_dataset(mesh2d, crs='EPSG:4326')
     
-    # Create UgridDataset and save
-    ugrid_complete = xu.UgridDataset(ds, grids=[grid])
+    # # Create UgridDataset and save
+    # ugrid_complete = xu.UgridDataset(ds, grids=[grid])
+    # ugrid_complete.ugrid.set_crs('EPSG:4326')
+
     ugrid_complete.ugrid.to_netcdf(output_path)
-    
+
+
     if verbose:
         print(f"✅ Refined grid saved to: {filename}")
-        print(f"   Nodes: {stats['nodes']:,} | Faces: {stats['faces']:,} | Edges: {stats['edges']:,}")
+        # print(f"   Nodes: {stats['nodes']:,} | Faces: {stats['faces']:,} | Edges: {stats['edges']:,}")
     
-    return output_path, stats, ugrid_complete
+    return output_path, ugrid_complete # stats, ugrid_complete
