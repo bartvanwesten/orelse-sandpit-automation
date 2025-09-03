@@ -1,0 +1,11 @@
+[forcing]
+Name                            = extra_rand_dcsm_0001
+Function                        = timeseries
+Time-interpolation              = linear
+Quantity                        = time
+Unit                            = minutes since 1950-01-01 00:00:00 +00:00
+Quantity                        = waterlevelbnd
+Unit                            = m
+0            0.28
+5.2596e+07   0.28
+
