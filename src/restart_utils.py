@@ -1,297 +1,340 @@
 """
-Utility functions for restart file analysis and interpolation in sandpit refinement workflow.
+Utility functions for DFM model partitioning and restart file generation.
 """
 
-import numpy as np
+import os
+import shutil
+import subprocess
+import re
+from pathlib import Path
+import glob
 import xarray as xr
-from datetime import datetime
-from scipy.spatial import Delaunay
 
 
-def create_restart_file(refined_ugrid, original_restart_analysis):
+def create_temporary_mdu(model_dir, original_mdu, refined_grid_nc, temp_suffix="_temp"):
     """
-    Create new restart file with refined grid dimensions and all variables (initialized to zero).
+    Create temporary MDU file with modified parameters for partitioning test.
     
     Parameters
     ----------
-    refined_ugrid : xugrid.UgridDataset
-        Refined grid dataset
-    original_restart_analysis : dict
-        Analysis results from original restart file
+    model_dir : Path
+        Model directory path
+    original_mdu : Path
+        Path to original MDU file
+    refined_grid_nc : Path
+        Path to refined grid NetCDF file
+    temp_suffix : str
+        Suffix for temporary MDU file
         
     Returns
     -------
-    xarray.Dataset
-        New restart file with correct dimensions and all variables
+    Path
+        Path to created temporary MDU file
     """
-    original_ds = original_restart_analysis['dataset']
+    temp_mdu = model_dir / f"{original_mdu.stem}{temp_suffix}{original_mdu.suffix}"
+    shutil.copy(original_mdu, temp_mdu)
     
-    # Get refined grid dimensions
-    n_refined_faces = refined_ugrid.sizes['mesh2d_nFaces']
-    n_refined_edges = refined_ugrid.sizes['mesh2d_nEdges']
+    # Copy refined grid to model directory
+    refined_grid_local = model_dir / refined_grid_nc.name
+    if not refined_grid_local.exists():
+        shutil.copy(refined_grid_nc, refined_grid_local)
     
-    # Create coordinate variables from refined grid
-    coords = {
-        'time': original_ds.coords['time'],
-        'FlowElem_xcc': xr.DataArray(
-            refined_ugrid.mesh2d_face_x.values,
-            dims=['nFlowElem'],
-            attrs={
-                'units': 'degrees_east',
-                'standard_name': 'longitude',
-                'long_name': 'x-coordinate of flow element circumcenter'
-            }
-        ),
-        'FlowElem_ycc': xr.DataArray(
-            refined_ugrid.mesh2d_face_y.values,
-            dims=['nFlowElem'],
-            attrs={
-                'units': 'degrees_north', 
-                'standard_name': 'latitude',
-                'long_name': 'y-coordinate of flow element circumcenter'
-            }
-        ),
-        'FlowLink_xu': xr.DataArray(
-            refined_ugrid.mesh2d_edge_x.values,
-            dims=['nFlowLink'],
-            attrs={
-                'units': 'degrees_east',
-                'standard_name': 'longitude', 
-                'long_name': 'x-coordinate of flow link center (velocity point)'
-            }
-        ),
-        'FlowLink_yu': xr.DataArray(
-            refined_ugrid.mesh2d_edge_y.values,
-            dims=['nFlowLink'],
-            attrs={
-                'units': 'degrees_north',
-                'standard_name': 'latitude',
-                'long_name': 'y-coordinate of flow link center (velocity point)'
-            }
-        ),
-        'FlowElem_xbnd': xr.DataArray(
-            np.array([]),
-            dims=['nFlowElemBnd'],
-            attrs={'long_name': 'longitude for boundary points'}
-        ),
-        'FlowElem_ybnd': xr.DataArray(
-            np.array([]),
-            dims=['nFlowElemBnd'],
-            attrs={'long_name': 'latitude for boundary points'}
-        )
+    # Read and modify MDU file
+    with open(temp_mdu, 'r') as f:
+        mdu_content = f.read()
+    
+    # Define modifications
+    modifications = {
+        'NetFile': refined_grid_nc.name,
+        'Stopdatetime': '20180101000002',
+        'MapInterval': '600.',
+        'RstInterval': '1. 1. 2.',
+        'HisInterval': '1.',
+        'DtUser': '1.',
+        'DtMax': '1.',
     }
     
-    # Create dataset with coordinates
-    new_restart_ds = xr.Dataset(coords=coords)
+    # Apply modifications
+    mdu_lines = mdu_content.split('\n')
+    for i, line in enumerate(mdu_lines):
+        for key, value in modifications.items():
+            if line.strip().startswith(key) and '=' in line:
+                mdu_lines[i] = f"{key:<40} = {value:<60} # Modified for partitioning test"
     
-    # Create all data variables with correct dimensions (initialized to zero)
-    variable_info = original_restart_analysis['variable_info']
+    # Write modified MDU
+    with open(temp_mdu, 'w') as f:
+        f.write('\n'.join(mdu_lines))
     
-    for var_name, var_info in variable_info.items():
-        # Map old dimensions to new dimensions
-        new_dims = []
-        new_shape = []
-        
-        for dim in var_info['dims']:
-            if dim in ['nFlowElem', 'nNetElem']:
-                new_dims.append('nFlowElem')
-                new_shape.append(n_refined_faces)
-            elif dim in ['nFlowLink', 'nNetLink']:
-                new_dims.append('nFlowLink')
-                new_shape.append(n_refined_edges)
-            elif dim == 'nFlowElemBnd':
-                new_dims.append('nFlowElemBnd')
-                new_shape.append(0)  # Empty for now
-            else:
-                # Keep original dimension (time, laydim, wdim, etc.)
-                new_dims.append(dim)
-                new_shape.append(original_ds.sizes[dim])
-        
-        # Create zero-filled array with correct shape and dtype
-        dtype = np.int32 if var_info['dtype'].startswith('int') else np.float64
-        fill_value = 0 if var_info['dtype'].startswith('int') else 0.0
-        zero_data = np.full(new_shape, fill_value, dtype=dtype)
-        
-        # Create DataArray with attributes
-        new_restart_ds[var_name] = xr.DataArray(
-            zero_data,
-            dims=new_dims,
-            attrs=var_info['attributes']
-        )
-    
-    # Copy global attributes from original
-    new_restart_ds.attrs = original_ds.attrs.copy()
-    new_restart_ds.attrs['history'] = f"Created from refined grid on {datetime.now().isoformat()}"
-    
-    return new_restart_ds
+    return temp_mdu
 
 
-def regrid_restart_data(original_ds, new_restart_ds, refined_ugrid, ugrid_original):
+def create_temporary_dimr_config(model_dir, dimr_config, temp_mdu, n_partitions, temp_suffix="_temp"):
     """
-    Regrid data from original restart to refined grid using triangulation interpolation.
+    Create temporary DIMR config file with updated partition settings.
     
     Parameters
     ----------
-    original_ds : xarray.Dataset
-        Original restart dataset
-    new_restart_ds : xarray.Dataset
-        New restart dataset (modified in place)
-    refined_ugrid : xugrid.UgridDataset
-        Refined grid dataset
-    ugrid_original : xugrid.UgridDataset
-        Original grid dataset
+    model_dir : Path
+        Model directory path
+    dimr_config : Path
+        Path to original DIMR config file
+    temp_mdu : Path
+        Path to temporary MDU file
+    n_partitions : int
+        Number of partitions
+    temp_suffix : str
+        Suffix for temporary config file
+        
+    Returns
+    -------
+    Path
+        Path to created temporary DIMR config file
     """
-    print("🔄 Starting restart data regridding...")
+    # Read original XML
+    with open(dimr_config, 'r', encoding='iso-8859-1') as f:
+        xml_content = f.read()
     
-    def categorize_variables(dataset):
-        """Categorize variables by location and dimensions."""
-        elem_1d, elem_2d, link_1d, link_2d = [], [], [], []
-        for var_name, var in dataset.data_vars.items():
-            dims = var.dims
-            if 'time' not in dims:
-                continue
-            if 'nFlowElem' in dims:
-                if len(dims) == 2:
-                    elem_1d.append(var_name)
-                elif len(dims) == 3:
-                    elem_2d.append(var_name)
-            elif 'nFlowLink' in dims:
-                if len(dims) == 2:
-                    link_1d.append(var_name)
-                elif len(dims) == 3:
-                    link_2d.append(var_name)
-        return elem_1d, elem_2d, link_1d, link_2d
+    # Update process element
+    process_pattern = r'(<process>)[^<]*(</process>)'
+    process_list = ' '.join(str(i) for i in range(n_partitions))
+    new_process = f'\\g<1>{process_list}\\g<2>'
+    xml_content = re.sub(process_pattern, new_process, xml_content)
     
-    def interp_weights(xy, uv, d=2):
-        """Compute interpolation weights using triangulation."""
-        tri = Delaunay(xy)
-        simplex = tri.find_simplex(uv)
-        vertices = np.take(tri.simplices, simplex, axis=0)
-        temp = np.take(tri.transform, simplex, axis=0)
-        delta = uv - temp[:, d]
-        bary = np.einsum('njk,nk->nj', temp[:, :d, :], delta)
-        return vertices, np.hstack((bary, 1 - bary.sum(axis=1, keepdims=True)))
+    # Update inputFile reference - derive original MDU name from temp MDU
+    original_mdu_name = temp_mdu.name.replace('_temp', '')
+    xml_content = xml_content.replace(original_mdu_name, temp_mdu.name)
     
-    def interpolate_values(values, vertices, weights, fill_value=0.0):
-        """Interpolate values using precomputed weights."""
-        interpolated = np.einsum('nj,nj->n', np.take(values, vertices), weights)
-        interpolated[np.any(weights < 0, axis=1)] = fill_value
-        return interpolated
+    # Save modified XML
+    temp_dimr_config = model_dir / f"{dimr_config.stem}{temp_suffix}{dimr_config.suffix}"
+    with open(temp_dimr_config, 'w', encoding='iso-8859-1') as f:
+        f.write(xml_content)
     
-    # Categorize variables
-    elem_1d, elem_2d, link_1d, link_2d = categorize_variables(original_ds)
-    print(f"   Elements: {len(elem_1d)} 1D + {len(elem_2d)} 2D variables")
-    print(f"   Links: {len(link_1d)} 1D + {len(link_2d)} 2D variables")
-    
-    # Get coordinates
-    original_elem_coords = np.column_stack([ugrid_original.mesh2d_face_x.values, ugrid_original.mesh2d_face_y.values])
-    original_link_coords = np.column_stack([ugrid_original.mesh2d_edge_x.values, ugrid_original.mesh2d_edge_y.values])
-    refined_elem_coords = np.column_stack([refined_ugrid.mesh2d_face_x.values, refined_ugrid.mesh2d_face_y.values])
-    refined_link_coords = np.column_stack([refined_ugrid.mesh2d_edge_x.values, refined_ugrid.mesh2d_edge_y.values])
-    
-    # Compute interpolation weights for elements
-    print("🔍 Computing element interpolation weights...")
-    elem_vertices, elem_weights = interp_weights(original_elem_coords, refined_elem_coords)
-    elem_inside = np.all(elem_weights > -1e-6, axis=1)
-    elem_inside_count = np.sum(elem_inside)
-    print(f"📍 Element mapping: {elem_inside_count:,} inside, {len(refined_elem_coords) - elem_inside_count:,} outside")
-    
-    # Compute interpolation weights for links
-    print("🔍 Computing link interpolation weights...")
-    link_vertices, link_weights = interp_weights(original_link_coords, refined_link_coords)
-    link_inside = np.all(link_weights > -1e-6, axis=1)
-    link_inside_count = np.sum(link_inside)
-    print(f"🔗 Link mapping: {link_inside_count:,} inside, {len(refined_link_coords) - link_inside_count:,} outside")
-    
-    # Process element variables
-    print("⚙️  Processing element variables...")
-    total_elem_vars = len(elem_1d) + len(elem_2d)
-    for i, var_name in enumerate(elem_1d + elem_2d, 1):
-        if var_name in new_restart_ds:
-            print(f"   Processing {var_name} ({i}/{total_elem_vars})")
-            
-            original_data = original_ds[var_name].values
-            new_data = new_restart_ds[var_name].values
-            
-            if len(original_data.shape) == 2:  # 1D variable
-                interpolated = interpolate_values(original_data[0], elem_vertices, elem_weights, fill_value=0.0)
-                new_data[0] = interpolated
-            else:  # 2D variable with layers
-                for layer in range(original_data.shape[2]):
-                    interpolated = interpolate_values(original_data[0, :, layer], elem_vertices, elem_weights, fill_value=0.0)
-                    new_data[0, :, layer] = interpolated
-    
-    # Process link variables
-    print("⚙️  Processing link variables...")
-    total_link_vars = len(link_1d) + len(link_2d)
-    for i, var_name in enumerate(link_1d + link_2d, 1):
-        if var_name in new_restart_ds:
-            print(f"   Processing {var_name} ({i}/{total_link_vars})")
-            
-            original_data = original_ds[var_name].values
-            new_data = new_restart_ds[var_name].values
-            
-            if len(original_data.shape) == 2:  # 1D variable
-                interpolated = interpolate_values(original_data[0], link_vertices, link_weights, fill_value=0.0)
-                new_data[0] = interpolated
-            else:  # 2D variable with layers
-                for layer in range(original_data.shape[2]):
-                    interpolated = interpolate_values(original_data[0, :, layer], link_vertices, link_weights, fill_value=0.0)
-                    new_data[0, :, layer] = interpolated
-    
-    print("✅ Restart data regridding complete!")
+    return temp_dimr_config
 
 
-def compare_restart_files(original_analysis, new_restart_ds):
+def partition_grid(dflowfm_exe, temp_mdu, n_partitions):
     """
-    Compare original and new restart files in table format.
+    Partition the refined grid using DFlow FM.
     
     Parameters
     ----------
-    original_analysis : dict
-        Analysis results from original restart file
-    new_restart_ds : xarray.Dataset
-        New restart dataset
-    """
-    original_ds = original_analysis['dataset']
-    
-    print("📊 RESTART FILE COMPARISON")
-    print("=" * 120)
-    
-    # Compare dimensions
-    print("📏 DIMENSIONS:")
-    print(f"{'Dimension Name':<25} {'Original Size':<15} {'New Size':<15} {'Change':<20}")
-    print("-" * 80)
-    
-    for dim_name in original_ds.sizes.keys():
-        orig_size = original_ds.sizes[dim_name]
-        new_size = new_restart_ds.sizes.get(dim_name, 0)
+    dflowfm_exe : Path
+        Path to DFlow FM executable
+    temp_mdu : Path
+        Path to temporary MDU file
+    n_partitions : int
+        Number of partitions
         
-        if new_size == 0:
-            change = "Missing"
-        elif new_size == orig_size:
-            change = "Same"
+    Returns
+    -------
+    bool
+        True if partitioning succeeded, False otherwise
+    """
+    partition_cmd = [
+        str(dflowfm_exe),
+        f'--partition:ndomains={n_partitions}:icgsolver=6',
+        str(temp_mdu.name)
+    ]
+    
+    print(f"Partition command: {' '.join(partition_cmd)}")
+    
+    result = subprocess.run(partition_cmd, capture_output=True, text=True, shell=True)
+    
+    print("Partitioning output:")
+    print(result.stdout)
+    if result.stderr:
+        print("Partitioning errors:")
+        print(result.stderr)
+    
+    if result.returncode == 0:
+        # Check if partition files were created
+        partition_files = list(Path('.').glob(f"{temp_mdu.stem}_0*{temp_mdu.suffix}"))
+        success = len(partition_files) == n_partitions
+        if success:
+            print(f"Partitioning completed successfully")
+            print(f"Created {len(partition_files)} partition MDU files")
         else:
-            ratio = new_size / orig_size if orig_size > 0 else 0
-            change = f"{ratio:.1f}x"
+            print(f"Partitioning failed: expected {n_partitions} files, got {len(partition_files)}")
+        return success
+    else:
+        print(f"Partitioning failed with return code {result.returncode}")
+        return False
+
+
+def run_parallel_model(dimr_parallel_exe, temp_dimr_config, n_partitions):
+    """
+    Run parallel model to generate restart files.
+    
+    Parameters
+    ----------
+    dimr_parallel_exe : Path
+        Path to DIMR parallel executable
+    temp_dimr_config : Path
+        Path to temporary DIMR config file
+    n_partitions : int
+        Number of partitions
         
-        print(f"{dim_name:<25} {orig_size:<15,} {new_size:<15,} {change:<20}")
+    Returns
+    -------
+    bool
+        True if model run succeeded, False otherwise
+    """
+    parallel_cmd = [
+        str(dimr_parallel_exe),
+        str(n_partitions),
+        str(temp_dimr_config.name)
+    ]
     
-    print()
+    print(f"Parallel run command: {' '.join(parallel_cmd)}")
     
-    # Summary statistics
-    coord_original_mb = sum(coord.size * coord.dtype.itemsize / (1024**2) for coord in original_ds.coords.values())
-    coord_new_mb = sum(coord.size * coord.dtype.itemsize / (1024**2) for coord in new_restart_ds.coords.values())
+    result = subprocess.run(parallel_cmd, capture_output=True, text=True, shell=True)
     
-    total_original_mb = sum(original_analysis['variable_info'][var]['size_mb'] for var in original_analysis['variable_info'])
-    total_new_mb = sum(var.size * var.dtype.itemsize / (1024**2) for var in new_restart_ds.data_vars.values())
+    print("Model run output:")
+    print(result.stdout)
+    if result.stderr:
+        print("Model run errors:")
+        print(result.stderr)
     
-    total_orig_all = coord_original_mb + total_original_mb
-    total_new_all = coord_new_mb + total_new_mb
-    size_ratio = total_new_all / total_orig_all if total_orig_all > 0 else 0
+    if result.returncode == 0:
+        # Check for restart files
+        rst_files = list(Path('.').glob("*_rst.nc"))
+        success = len(rst_files) > 0
+        if success:
+            print(f"Model run completed successfully")
+            print(f"Generated {len(rst_files)} restart files")
+        else:
+            print("Model run succeeded but no restart files found")
+        return success
+    else:
+        print(f"Model run failed with return code {result.returncode}")
+        return False
+
+
+def setup_partitioned_model(model_dir, original_mdu, dimr_config, refined_grid_nc, 
+                           dflowfm_exe, dimr_parallel_exe, n_partitions):
+    """
+    Complete workflow to setup partitioned model with refined grid.
     
-    print(f"💾 SUMMARY:")
-    print(f"   Original file size: {original_analysis['file_size_gb']:.2f} GB")
-    print(f"   New file size (estimated): {total_new_all/1024:.2f} GB")
-    print(f"   Size increase factor: {size_ratio:.1f}x")
-    print("=" * 120)
+    Parameters
+    ----------
+    model_dir : Path
+        Model directory path
+    original_mdu : Path
+        Path to original MDU file
+    dimr_config : Path
+        Path to DIMR config file
+    refined_grid_nc : Path
+        Path to refined grid NetCDF file
+    dflowfm_exe : Path
+        Path to DFlow FM executable
+    dimr_parallel_exe : Path
+        Path to DIMR parallel executable
+    n_partitions : int
+        Number of partitions
+        
+    Returns
+    -------
+    dict
+        Dictionary with results and file paths
+    """
+    # Store original working directory and resolve absolute paths first
+    original_cwd = Path.cwd()
+    model_dir = Path(model_dir).resolve()
+    original_mdu = Path(original_mdu).resolve()
+    dimr_config = Path(dimr_config).resolve()
+    refined_grid_nc = Path(refined_grid_nc).resolve()
+    
+    # Create temporary files first while in original directory
+    temp_mdu = create_temporary_mdu(model_dir, original_mdu, refined_grid_nc)
+    temp_dimr_config = create_temporary_dimr_config(model_dir, dimr_config, temp_mdu, n_partitions)
+    
+    # Change to model directory for partitioning
+    os.chdir(model_dir)
+    
+    # Partition grid
+    partition_success = partition_grid(dflowfm_exe, temp_mdu, n_partitions)
+    
+    # Run parallel model
+    model_success = False
+    if partition_success:
+        model_success = run_parallel_model(dimr_parallel_exe, temp_dimr_config, n_partitions)
+    
+    # Get created files
+    partition_files = list(Path('.').glob(f"{temp_mdu.stem}_0*{temp_mdu.suffix}"))
+    rst_files = list(Path('.').glob("*_rst.nc"))
+    
+    # Restore working directory
+    os.chdir(original_cwd)
+    
+    return {
+        'partition_success': partition_success,
+        'model_success': model_success,
+        'temp_mdu': temp_mdu,
+        'temp_dimr_config': temp_dimr_config,
+        'partition_files': partition_files,
+        'restart_files': rst_files
+    }
+
+def load_restart_files(model_dir):
+    """
+    Load all partitioned restart files from model directory.
+    
+    Parameters
+    ----------
+    model_dir : Path
+        Model directory containing restart files
+        
+    Returns
+    -------
+    list
+        List of (partition_number, dataset) tuples sorted by partition number
+    """
+    restart_files = glob.glob(str(model_dir / "*_rst.nc"))
+    datasets = []
+    
+    for file_path in restart_files:
+        print(f"Loading restart file: {file_path}")
+        filename = Path(file_path).stem
+        partition_num = None
+        for part in filename.split('_'):
+            if part.isdigit() and len(part) == 4:
+                partition_num = int(part)
+                break
+        
+        if partition_num is not None:
+            ds = xr.open_dataset(file_path, decode_timedelta=False)
+            datasets.append((partition_num, ds))
+    
+    return sorted(datasets, key=lambda x: x[0])
+
+
+def save_restart_files(datasets, output_dir, suffix="_modified"):
+    """
+    Save modified restart datasets to output directory.
+    
+    Parameters
+    ----------
+    datasets : list
+        List of (partition_number, dataset) tuples
+    output_dir : Path
+        Output directory for modified restart files
+    suffix : str
+        Suffix to add to output filenames
+        
+    Returns
+    -------
+    list
+        List of saved file paths
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    saved_files = []
+    for partition_num, dataset in datasets:
+        filename = f"restart_{partition_num:04d}{suffix}.nc"
+        output_path = output_dir / filename
+        dataset.to_netcdf(output_path)
+        saved_files.append(output_path)
+        dataset.close()
+    
+    return saved_files

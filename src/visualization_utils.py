@@ -215,3 +215,94 @@ def plot_grid(mk_object, polygons, all_refinement_polygons, all_original_polygon
     ax.legend(handles=legend_elements, loc='upper left')
     plt.tight_layout()
     plt.show()
+
+
+def plot_restart_results(datasets, polygons, title="Restart File Results"):
+    """
+    Plot restart file results showing partitions and bed level modifications.
+    
+    Parameters
+    ----------
+    datasets : list
+        List of (partition_number, dataset) tuples
+    polygons : list
+        List of sandpit polygon coordinate lists
+    title : str
+        Plot title
+    """
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 8))
+    
+    # Get polygon bounds for zoomed plot
+    x_min, x_max, y_min, y_max = get_polygon_bounds([polygons])
+    
+    # Plot 1: All partitions by color
+    colors = plt.cm.tab10.colors
+    
+    for partition_num, dataset in datasets:
+        color = colors[partition_num % len(colors)]
+        
+        # Plot partition points
+        ax1.scatter(dataset.FlowElem_xcc.values, dataset.FlowElem_ycc.values, 
+                   c=color, s=1, alpha=0.6, label=f'Partition {partition_num}')
+    
+    # Plot sandpit polygons on partition plot
+    for i, poly in enumerate(polygons):
+        poly_array = np.array(poly)
+        closed_poly = np.vstack([poly_array, poly_array[0]])
+        ax1.plot(closed_poly[:, 0], closed_poly[:, 1], color='red', linewidth=2)
+        ax1.fill(closed_poly[:, 0], closed_poly[:, 1], color='red', alpha=0.3)
+    
+    ax1.set_xlabel('Longitude [degrees]')
+    ax1.set_ylabel('Latitude [degrees]')
+    ax1.set_title('Partitions Overview')
+    ax1.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    ax1.grid(True, alpha=0.3)
+    ax1.set_aspect('equal')
+    
+    # Plot 2: Zoomed view with bed levels
+    all_coords = []
+    all_bed_levels = []
+    
+    for partition_num, dataset in datasets:
+        coords = np.column_stack([dataset.FlowElem_xcc.values, dataset.FlowElem_ycc.values])
+        bed_levels = dataset.FlowElem_bl.values
+        
+        # Handle time dimension
+        if len(bed_levels.shape) == 2:
+            bed_levels = bed_levels[0]  # Use first time step
+        
+        all_coords.append(coords)
+        all_bed_levels.append(bed_levels)
+    
+    # Combine all partitions
+    combined_coords = np.vstack(all_coords)
+    combined_bed_levels = np.concatenate(all_bed_levels)
+    
+    # Create scatter plot with bed level coloring
+    scatter = ax2.scatter(combined_coords[:, 0], combined_coords[:, 1], 
+                         c=combined_bed_levels, s=2, cmap='terrain_r', alpha=0.8)
+    
+    # Plot sandpit polygons
+    for i, poly in enumerate(polygons):
+        poly_array = np.array(poly)
+        closed_poly = np.vstack([poly_array, poly_array[0]])
+        ax2.plot(closed_poly[:, 0], closed_poly[:, 1], color='red', linewidth=3)
+    
+    # Set zoom to sandpit area
+    margin = 0.01  # degrees
+    ax2.set_xlim(x_min - margin, x_max + margin)
+    ax2.set_ylim(y_min - margin, y_max + margin)
+    
+    ax2.set_xlabel('Longitude [degrees]')
+    ax2.set_ylabel('Latitude [degrees]')
+    ax2.set_title('Bed Levels (Zoomed to Sandpits)')
+    ax2.grid(True, alpha=0.3)
+    ax2.set_aspect('equal')
+    
+    # Add colorbar for bed levels
+    cbar = plt.colorbar(scatter, ax=ax2)
+    cbar.set_label('Bed Level [m]')
+    
+    plt.suptitle(title, fontsize=16)
+    plt.tight_layout()
+    plt.show()
