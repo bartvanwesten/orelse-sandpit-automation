@@ -92,20 +92,28 @@ You can use this tool in two ways:
 
 ## Quick Usage
 
-### Basic Workflow
+### Complete Workflow
 
-1. **Configure** (Step 0): Set target resolution and buffer parameters
+1. **Configuration** (Step 0): Set target resolution, buffer parameters, and digging parameters
 2. **Load Grid** (Step 1): Load D-Flow FM grid and sandpit polygons
 3. **Plan Refinement** (Step 2): Generate refinement zones with overlap detection
-4. **Execute** (Step 3): Apply Casulli refinement to grid
+4. **Execute Refinement** (Step 3): Apply Casulli refinement to grid
 5. **Monitor Quality** (Step 4): Analyze grid quality metrics (optional)
+6. **Export Grid** (Step 5): Save refined grid to NetCDF format
+7. **Setup Partitioned Model** (Step 6): Create partitioned model with refined grid
+8. **Modify Restart Variables** (Step 7): Apply sandpit excavation to bed levels in restart files
 
 ### Key Parameters
 
 ```python
-target_resolution = 30      # Target resolution in meters
+# Refinement parameters
+target_resolution = 100     # Target resolution in meters
 buffer_around_sandpit = 250 # Buffer around polygons in meters  
-N = 7                       # Number of transition cells
+N = 6                       # Number of transition cells
+
+# Digging parameters
+dig_depth = 5.0            # meters to lower bed level
+slope = 0.03               # slope ratio for smooth transitions
 ```
 
 ### Input Files
@@ -115,12 +123,17 @@ N = 7                       # Number of transition cells
   - Existing `.pol` file with sandpit boundaries
   - Interactive drawing (local only)
 
+## Project Structure
+
 ```
 ├── src/                          # Core utilities
 │   ├── polygon_utils.py         # Polygon operations & interactive drawing
 │   ├── refinement_utils.py      # Grid analysis & Casulli refinement
 │   ├── visualization_utils.py   # Plotting & environment detection
-│   └── monitoring_utils.py      # Grid quality analysis
+│   ├── monitoring_utils.py      # Grid quality analysis
+│   ├── restart_utils.py         # Partitioned model & restart file handling
+│   ├── netcdf_utils.py          # NetCDF export utilities
+│   └── modify_bedlevel.py       # Bed level modification functions
 ├── notebooks/
 │   └── automatic_sandpit_refinement.ipynb  # Main workflow
 ├── data/
@@ -128,6 +141,8 @@ N = 7                       # Number of transition cells
 │   └── output/                  # Generated outputs
 └── requirements.txt             # Python dependencies
 ```
+
+## Dependencies
 
 - `dfm_tools` - D-Flow FM utilities
 - `meshkernel` - Grid operations and Casulli refinement  
